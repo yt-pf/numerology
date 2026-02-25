@@ -1,0 +1,57 @@
+name: Python Static Analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies & tools
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pylint flake8 mypy bandit ruff pytest
+
+      - name: Run ruff (fast lint + formatting)
+        run: ruff check .
+
+      - name: Run pylint
+        run: pylint **/*.py
+
+      - name: Run flake8 with GitHub annotations
+        run: |
+          flake8 . \
+            --format="::error file=%(path)s,line=%(row)d,col=%(col)d::%(code)s %(text)s"
+
+      - name: Run mypy (type checking)
+        run: mypy .
+
+      - name: Run bandit (security)
+        run: bandit -r . -ll
+
+      - name: Run tests
+        run: pytest
